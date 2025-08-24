@@ -1,18 +1,12 @@
+// app/api/strategy/snapshot/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { StrategySchema } from "../../../../lib/schemas";
 import { openai } from "../../../../lib/openai";
 
-/**
- * API route for generating a strategy snapshot. If an OpenAI API key is
- * not configured, a dummy strategy will be returned for demonstration
- * purposes. When an API key is present, this endpoint attempts to call
- * the Responses API with a JSON schema based on StrategySchema.
- */
 export async function POST(req: NextRequest) {
   const input = await req.json();
 
-  // If no API key is available, return a hard-coded snapshot. This allows
-  // local development without an external network call.
+  // بدون کلید → خروجی دمو
   if (!process.env.OPENAI_API_KEY) {
     return NextResponse.json({
       goal: input.goal ?? "sales",
@@ -29,27 +23,49 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // When API key is present, attempt to call OpenAI Responses API
   try {
-    // Convert zod schema to JSON Schema. If using Zod >= 3.22, toJSON is available.
-    const jsonSchema: any = StrategySchema.toJSON ? StrategySchema.toJSON() : {};
     const resp = await openai.responses.create({
-      model: "gpt-5",
-      response_format: {
-        type: "json_schema",
-        json_schema: { name: "strategy", schema: jsonSchema, strict: true },
-      },
-      instructions:
-        "تو \"استراتژیست محتوا\" هستی. بر اساس ورودی کاربر (goal, industry, audience, tone, capacity) یک snapshot استراتژی بساز. خروجی فقط باید مطابق اسکیمای JSON باشد.",
-      input: [{ role: "user", content: JSON.stringify(input) }],
+      model: "gpt-4.1-mini",
+      text: { format: "json" }, // ✅ جایگزین response_format
+      input: [
+        {
+          role: "system",
+          content:
+            'تو "استراتژیست محتوا" هستی. فقط JSON خالص بده که دقیقاً با اسکیمای خواسته‌شده همخوان باشد.',
+        },
+        {
+          role: "user",
+          content:
+            "این ورودی کاربر (goal, industry, audience, tone, capacity):\n" +
+            JSON.stringify(input),
+        },
+        {
+          role: "user",
+          content:
+            "کلیدهای لازم در خروجی: goal, pillars(array), funnel{awareness,consideration,action}, mix_weekly{reels,stories,posts}, tone, guardrails(array). فقط JSON بده.",
+        },
+      ],
     });
-    const data = JSON.parse(resp.output_text || "{}");
-    return NextResponse.json(data);
+
+    const outText =
+      (resp as any).output_text ??
+      (resp as any)?.output?.[0]?.content?.[0]?.text ??
+      "";
+    const json = JSON.parse(outText || "{}");
+
+    const parsed = StrategySchema.safeParse(json);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: "Schema mismatch", issues: parsed.error.issues },
+        { status: 422 }
+      );
+    }
+    return NextResponse.json(parsed.data);
   } catch (err: any) {
     console.error(err);
     return NextResponse.json(
-      { error: err.message ?? "خطا در فراخوانی OpenAI" },
-      { status: 500 },
+      { error: err?.message ?? "خطا در فراخوانی OpenAI" },
+      { status: 500 }
     );
   }
 }
