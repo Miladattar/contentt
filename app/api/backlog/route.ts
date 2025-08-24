@@ -1,4 +1,3 @@
-// app/api/backlog/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { TopicSchema } from "../../../lib/schemas";
 import { openai } from "../../../lib/openai";
@@ -8,7 +7,6 @@ export async function POST(req: NextRequest) {
   const { strategy } = body || {};
 
   if (!process.env.OPENAI_API_KEY) {
-    // دمو
     return NextResponse.json({
       items: Array.from({ length: 10 }).map((_, i) => ({
         title: ایده شماره ${i + 1},
@@ -23,28 +21,15 @@ export async function POST(req: NextRequest) {
       model: "gpt-4.1-mini",
       text: { format: "json" },
       input: [
-        {
-          role: "system",
-          content:
-            "تو ایده‌پرداز محتوا هستی. فقط JSON مطابق اسکیمای TopicSchema بده.",
-        },
-        {
-          role: "user",
-          content:
-            "استراتژی این است:\n" + JSON.stringify(strategy ?? {}, null, 2),
-        },
-        {
-          role: "user",
-          content:
-            "۱۰ ایده بده با کلیدهای: items[{title, format (یکی از: «رِیل», «پست», «توییت», «نوشته»), score(0..100)}]",
-        },
+        { role: "system", content: "تو ایده‌پرداز محتوا هستی. فقط JSON مطابق اسکیمای TopicSchema بده." },
+        { role: "user", content: "استراتژی این است:\n" + JSON.stringify(strategy ?? {}, null, 2) },
+        { role: "user", content: "۱۰ ایده بده با کلیدهای: items[{title, format (یکی از: «رِیل», «پست», «توییت», «نوشته»), score(0..100)}]" },
       ],
     });
 
     const outText =
       (resp as any).output_text ??
-      (resp as any)?.output?.[0]?.content?.[0]?.text ??
-      "";
+      (resp as any)?.output?.[0]?.content?.[0]?.text ?? "";
     const json = JSON.parse(outText || "{}");
 
     const parsed = TopicSchema.safeParse(json);
