@@ -1,48 +1,73 @@
+// app/api/script/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { ScriptSchema } from "../../../lib/schemas";
 import { openai } from "../../../lib/openai";
 
-/**
- * API route to generate a structured script for a selected topic. If
- * an OpenAI API key is not present, return a simple mock script. When
- * available, call the Responses API with ScriptSchema to enforce
- * structure.
- */
 export async function POST(req: NextRequest) {
-  const { topic, technique, format, brand } = await req.json();
+  const body = await req.json();
+  const { idea, strategy } = body || {};
 
   if (!process.env.OPENAI_API_KEY) {
+    // دمو
     return NextResponse.json({
-      id: "mock-script-1",
-      title: topic?.title || "موضوع نامشخص",
-      technique,
-      format,
-      blocks: {
-        hook: "قلاب کوتاه نمونه",
-        beats: ["نقطه اول", "نقطه دوم", "نقطه سوم"],
-        narration: ["متن اول", "متن دوم"],
-        cta: "اگر مفید بود، ذخیره و اشتراک بذارید."
-      }
+      id: "demo-1",
+      title: idea?.title ?? "نمونه اسکریپت",
+      technique: "suspense",
+      format: idea?.format ?? "رِیل",
+      blocks: {},
+      hooks: "یه راز کوچیک که کسی بهت نگفته…",
+      beats: ["هوک", "بدنه", "نتیجه"],
+      planSilent: ["کات به قبل/بعد", "نمای نزدیک"],
+      narration: ["جمله ۱", "جمله ۲", "CTA"],
+      cta: "برای دیدن نتایج بیشتر فالو کن",
     });
   }
+
   try {
-    const jsonSchema: any = ScriptSchema.toJSON ? ScriptSchema.toJSON() : {};
     const resp = await openai.responses.create({
-      model: "gpt-5",
-      response_format: {
-        type: "json_schema",
-        json_schema: { name: "script", schema: jsonSchema, strict: true },
-      },
-      instructions:
-        `تو \"سناریونویس\" هستی. قواعد: ضبط‌پسند، CTA نرم، بدون وعده قطعی پزشکی. برای ${format} با تکنیک ${technique} سناریو بده. خروجی فقط مطابق اسکیمای JSON باشد.`,
+      model: "gpt-4.1-mini",
+      text: { format: "json" },
       input: [
-        { role: "user", content: JSON.stringify({ topic, brand }) },
+        {
+          role: "system",
+          content:
+            "تو کپی‌رایتر و استراتژیست ویدیو هستی. فقط JSON مطابق اسکیمای ScriptSchema بده.",
+        },
+        {
+          role: "user",
+          content: "استراتژی:\n" + JSON.stringify(strategy ?? {}, null, 2),
+        },
+        {
+          role: "user",
+          content: "ایده انتخاب‌شده:\n" + JSON.stringify(idea ?? {}, null, 2),
+        },
+        {
+          role: "user",
+          content:
+            "خروجی با کلیدهای: id, title, technique, format, blocks{}, hooks, beats[], planSilent[], narration[], cta",
+        },
       ],
     });
-    const data = JSON.parse(resp.output_text || "{}");
-    return NextResponse.json(data);
+
+    const outText =
+      (resp as any).output_text ??
+      (resp as any)?.output?.[0]?.content?.[0]?.text ??
+      "";
+    const json = JSON.parse(outText || "{}");
+
+    const parsed = ScriptSchema.safeParse(json);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: "Schema mismatch", issues: parsed.error.issues },
+        { status: 422 }
+      );
+    }
+    return NextResponse.json(parsed.data);
   } catch (err: any) {
     console.error(err);
-    return NextResponse.json({ error: err.message ?? "خطا در فراخوانی OpenAI" }, { status: 500 });
+    return NextResponse.json(
+      { error: err?.message ?? "خطا در فراخوانی OpenAI" },
+      { status: 500 }
+    );
   }
 }
