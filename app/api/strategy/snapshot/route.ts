@@ -3,48 +3,42 @@ import { NextRequest, NextResponse } from "next/server";
 import { StrategySchema } from "../../../../lib/schemas";
 import { openai } from "../../../../lib/openai";
 
-// --- Helper: متن خروجی مدل را تمیز می‌کند و JSON را استخراج می‌کند ---
+// Helper: خروجی مدل را تمیز می‌کند و JSON را استخراج می‌کند (بدون return داخل بلاک‌های تو در تو)
 const extractJson = (text: string) => {
-  const t = (text || "").trim();
+  let payload = (text || "").trim();
 
-  // حالت کدبلاک  if (t.startsWith("```")) {
-    const cleaned = t
-      .replace(/^```[a-zA-Z]*\n?/, "")
-      .replace(/```$/, "")
-      .trim();
-    try {
-      return JSON.parse(cleaned);
-    } catch {
-      // ادامه می‌دهیم و روش‌های بعدی را امتحان می‌کنیم
+  // اگر کدبلاک... بود، فقط محتوا را بردار
+  if (payload.startsWith("```")) {
+    const start = payload.indexOf("\n");       // بعد از    const end = payload.lastIndexOf("```");    // قبل از     if (start !== -1 && end !== -1 && end > start) {
+      payload = payload.slice(start + 1, end).trim();
     }
   }
 
-  // تلاش: اولین آبجکت { ... }
-  {
-    const first = t.indexOf("{");
-    const last = t.lastIndexOf("}");
-    if (first !== -1 && last !== -1 && last > first) {
-      const candidate = t.slice(first, last + 1);
-      try {
-        return JSON.parse(candidate);
-      } catch {
-        // ادامه
-      }
-    }
+  // 1) تلاش مستقیم
+  try {
+    return JSON.parse(payload);
+  } catch {}
+
+  // 2) تلاش: اولین آبجکت { ... }
+  let candidate: string | null = null;
+  let first = payload.indexOf("{");
+  let last = payload.lastIndexOf("}");
+  if (first !== -1 && last !== -1 && last > first) {
+    candidate = payload.slice(first, last + 1);
+  }
+  if (candidate) {
+    try { return JSON.parse(candidate); } catch {}
   }
 
-  // تلاش: اولین آرایه [ ... ]
-  {
-    const first = t.indexOf("[");
-    const last = t.lastIndexOf("]");
-    if (first !== -1 && last !== -1 && last > first) {
-      const candidate = t.slice(first, last + 1);
-      try {
-        return JSON.parse(candidate);
-      } catch {
-        // ادامه
-      }
-    }
+  // 3) تلاش: اولین آرایه [ ... ]
+  candidate = null;
+  first = payload.indexOf("[");
+  last = payload.lastIndexOf("]");
+  if (first !== -1 && last !== -1 && last > first) {
+    candidate = payload.slice(first, last + 1);
+  }
+  if (candidate) {
+    try { return JSON.parse(candidate); } catch {}
   }
 
   throw new Error("Model did not return valid JSON");
@@ -73,12 +67,12 @@ export async function POST(req: NextRequest) {
   try {
     const resp = await openai.responses.create({
       model: "gpt-4.1-mini",
-      // عمداً هیچ text.format یا response_format نمی‌فرستیم
+      // هیچ پارامتر response_format یا text.format ارسال نکن
       input: [
         {
           role: "system",
           content:
-            'تو "استراتژیست محتوا" هستی. فقط و فقط JSON معتبر بده. هیچ متن اضافی، توضیح، یا کدبلاک مارک‌داون (```json) نیاور.',
+            'تو "استراتژیست محتوا" هستی. فقط و فقط JSON معتبر بده. هیچ متن اضافی یا کدبلاک مارک‌داون (```json) ننویس.',
         },
         {
           role: "user",
@@ -89,7 +83,7 @@ export async function POST(req: NextRequest) {
         {
           role: "user",
           content:
-            "کلیدهای لازم: goal, pillars(array), funnel{awareness,consideration,action}, mix_weekly{reels,stories,posts}, tone, guardrails(array). فقط JSON بده.",
+            "کلیدهای خروجی: goal, pillars(array), funnel{awareness,consideration,action}, mix_weekly{reels,stories,posts}, tone, guardrails(array). فقط JSON بده.",
         },
       ],
     });
