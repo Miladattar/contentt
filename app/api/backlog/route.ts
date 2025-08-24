@@ -3,24 +3,28 @@ import { NextRequest, NextResponse } from "next/server";
 import { TopicSchema } from "../../../lib/schemas";
 import { openai } from "../../../lib/openai";
 
-function extractJson(text: string) {
+const extractJson = (text: string) => {
   const t = (text || "").trim();
   if (t.startsWith("```")) {
     const cleaned = t.replace(/^```[a-zA-Z]*\n?/, "").replace(/```$/, "").trim();
     try { return JSON.parse(cleaned); } catch {}
   }
-  let first = t.indexOf("{"), last = t.lastIndexOf("}");
-  if (first !== -1 && last !== -1 && last > first) {
-    const candidate = t.slice(first, last + 1);
-    try { return JSON.parse(candidate); } catch {}
+  {
+    const first = t.indexOf("{"), last = t.lastIndexOf("}");
+    if (first !== -1 && last !== -1 && last > first) {
+      const candidate = t.slice(first, last + 1);
+      try { return JSON.parse(candidate); } catch {}
+    }
   }
-  first = t.indexOf("["), last = t.lastIndexOf("]");
-  if (first !== -1 && last !== -1 && last > first) {
-    const candidate = t.slice(first, last + 1);
-    try { return JSON.parse(candidate); } catch {}
+  {
+    const first = t.indexOf("["), last = t.lastIndexOf("]");
+    if (first !== -1 && last !== -1 && last > first) {
+      const candidate = t.slice(first, last + 1);
+      try { return JSON.parse(candidate); } catch {}
+    }
   }
   throw new Error("Model did not return valid JSON");
-}
+};
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
@@ -43,7 +47,7 @@ export async function POST(req: NextRequest) {
         {
           role: "system",
           content:
-            "تو ایده‌پرداز محتوا هستی. فقط JSON معتبر مطابق اسکیمای TopicSchema بده. هیچ متن اضافی یا کد بلاک مارک‌داون نیاور.",
+            "تو ایده‌پرداز محتوا هستی. فقط JSON معتبر مطابق TopicSchema بده. هیچ متن اضافی یا کدبلاک مارک‌داون نیاور.",
         },
         {
           role: "user",
