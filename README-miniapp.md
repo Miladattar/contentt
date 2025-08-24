@@ -1,0 +1,1 @@
+# Content Agent — Telegram Mini App (Final)\n\n1) فایل `.env.local.example` را به `.env.local` کپی و مقادیر را پر کنید.\n2) `npm install` سپس `npm run dev`.\n3) Vercel: Import → Env `OPENAI_API_KEY` → Deploy.\n4) BotFather: `/setdomain` و سپس `/setmenubutton` با URL `/brief`.\n
