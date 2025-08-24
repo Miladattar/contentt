@@ -1,49 +1,65 @@
+// app/api/backlog/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { TopicSchema } from "../../../lib/schemas";
 import { openai } from "../../../lib/openai";
 
-/**
- * API route for generating a prioritized backlog of topics. If the
- * environment does not have an OpenAI API key, return a handful of
- * example topics with scores. Otherwise attempt to call the Responses
- * API with a JSON schema based on TopicSchema.
- */
 export async function POST(req: NextRequest) {
-  const { strategy } = await req.json();
+  const body = await req.json();
+  const { strategy } = body || {};
 
   if (!process.env.OPENAI_API_KEY) {
+    // دمو
     return NextResponse.json({
-      items: [
-        { title: "بوتاکس برای چی خوبه/نیست؟", format: "ریلز", score: 90 },
-        { title: "۳ اشتباه قبل ژل لب", format: "ریلز", score: 88 },
-        { title: "مراقبت بعد بوتاکس", format: "استوری", score: 85 },
-        { title: "فیلر یا مزوژل؟", format: "پست", score: 84 },
-        { title: "کِی فیلر زیر چشم مجاز نیست؟", format: "ریلز", score: 80 },
-        { title: "برند و اصالت مواد", format: "استوری", score: 78 },
-        { title: "نتیجه طبیعی با دوز کم", format: "ریلز", score: 75 },
-        { title: "برنامه نگهداری ۶ ماهه", format: "استوری", score: 73 },
-        { title: "سؤالات پرتکرار ورم/کبودی", format: "پست", score: 72 },
-        { title: "پشت‌صحنه استریل", format: "استوری", score: 70 },
-      ],
+      items: Array.from({ length: 10 }).map((_, i) => ({
+        title: ایده شماره ${i + 1},
+        format: ["رِیل", "پست", "توییت", "نوشته"][i % 4],
+        score: 70 + (i % 20),
+      })),
     });
   }
 
   try {
-    const jsonSchema: any = TopicSchema.toJSON ? TopicSchema.toJSON() : {};
     const resp = await openai.responses.create({
-      model: "gpt-5",
-      response_format: {
-        type: "json_schema",
-        json_schema: { name: "topics", schema: jsonSchema, strict: true },
-      },
-      instructions:
-        "از روی strategy زیر، 120 دغدغه و 120 تیتر بساز و سپس 20 موضوع اولویت‌دار را با امتیاز 0..100 خروجی بده. خروجی باید فقط مطابق اسکیمای JSON باشد.",
-      input: [{ role: "user", content: JSON.stringify(strategy) }],
+      model: "gpt-4.1-mini",
+      text: { format: "json" },
+      input: [
+        {
+          role: "system",
+          content:
+            "تو ایده‌پرداز محتوا هستی. فقط JSON مطابق اسکیمای TopicSchema بده.",
+        },
+        {
+          role: "user",
+          content:
+            "استراتژی این است:\n" + JSON.stringify(strategy ?? {}, null, 2),
+        },
+        {
+          role: "user",
+          content:
+            "۱۰ ایده بده با کلیدهای: items[{title, format (یکی از: «رِیل», «پست», «توییت», «نوشته»), score(0..100)}]",
+        },
+      ],
     });
-    const data = JSON.parse(resp.output_text || "{}");
-    return NextResponse.json(data);
+
+    const outText =
+      (resp as any).output_text ??
+      (resp as any)?.output?.[0]?.content?.[0]?.text ??
+      "";
+    const json = JSON.parse(outText || "{}");
+
+    const parsed = TopicSchema.safeParse(json);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: "Schema mismatch", issues: parsed.error.issues },
+        { status: 422 }
+      );
+    }
+    return NextResponse.json(parsed.data);
   } catch (err: any) {
     console.error(err);
-    return NextResponse.json({ error: err.message ?? "خطا در فراخوانی OpenAI" }, { status: 500 });
+    return NextResponse.json(
+      { error: err?.message ?? "خطا در فراخوانی OpenAI" },
+      { status: 500 }
+    );
   }
 }
