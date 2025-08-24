@@ -3,11 +3,29 @@ import { NextRequest, NextResponse } from "next/server";
 import { ScriptSchema } from "../../../lib/schemas";
 import { openai } from "../../../lib/openai";
 
+function extractJson(text: string) {
+  const t = (text || "").trim();
+  if (t.startsWith("```")) {
+    const cleaned = t.replace(/^```[a-zA-Z]*\n?/, "").replace(/```$/, "").trim();
+    try { return JSON.parse(cleaned); } catch {}
+  }
+  let first = t.indexOf("{"), last = t.lastIndexOf("}");
+  if (first !== -1 && last !== -1 && last > first) {
+    const candidate = t.slice(first, last + 1);
+    try { return JSON.parse(candidate); } catch {}
+  }
+  first = t.indexOf("["), last = t.lastIndexOf("]");
+  if (first !== -1 && last !== -1 && last > first) {
+    const candidate = t.slice(first, last + 1);
+    try { return JSON.parse(candidate); } catch {}
+  }
+  throw new Error("Model did not return valid JSON");
+}
+
 export async function POST(req: NextRequest) {
   const body = await req.json();
   const { idea, strategy } = body || {};
 
-  // بدون کلید → دمو
   if (!process.env.OPENAI_API_KEY) {
     return NextResponse.json({
       id: "demo-1",
@@ -26,12 +44,11 @@ export async function POST(req: NextRequest) {
   try {
     const resp = await openai.responses.create({
       model: "gpt-4.1-mini",
-      // ⛔️ هیچ text.format ست نمی‌کنیم
       input: [
         {
           role: "system",
           content:
-            "تو کپی‌رایتر و استراتژیست ویدیو هستی. فقط JSON معتبر مطابق اسکیمای ScriptSchema بده. هیچ متن اضافی ننویس.",
+            "تو کپی‌رایتر و استراتژیست ویدیو هستی. فقط JSON معتبر مطابق اسکیمای ScriptSchema بده. هیچ متن اضافه یا کد بلاک مارک‌داون نیاور.",
         },
         { role: "user", content: "استراتژی:\n" + JSON.stringify(strategy ?? {}, null, 2) },
         { role: "user", content: "ایده انتخاب‌شده:\n" + JSON.stringify(idea ?? {}, null, 2) },
@@ -47,7 +64,8 @@ export async function POST(req: NextRequest) {
       (resp as any).output_text ??
       (resp as any)?.output?.[0]?.content?.[0]?.text ??
       "";
-    const json = JSON.parse(outText || "{}");
+
+    const json = extractJson(outText);
 
     const parsed = ScriptSchema.safeParse(json);
     if (!parsed.success) {
