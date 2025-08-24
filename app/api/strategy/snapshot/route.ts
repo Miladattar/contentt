@@ -1,7 +1,7 @@
 // app/api/strategy/snapshot/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { StrategySchema } from "@/lib/schemas";
-import { openai } from "@/lib/openai";
+import { StrategySchema } from "../../../../lib/schemas";
+import { openai } from "../../../../lib/openai";
 
 export async function POST(req: NextRequest) {
   const input = await req.json();
@@ -26,17 +26,17 @@ export async function POST(req: NextRequest) {
   try {
     const resp = await openai.responses.create({
       model: "gpt-4.1-mini",
-      text: { format: "json" }, // ✅ جایگزین response_format
+      // ⛔️ هیچ text.format یا response_format تنظیم نمی‌کنیم
       input: [
         {
           role: "system",
           content:
-            'تو "استراتژیست محتوا" هستی. فقط JSON خالص بده که دقیقاً با اسکیمای خواسته‌شده همخوان باشد.',
+            'تو "استراتژیست محتوا" هستی. خروجی را فقط به‌صورت JSON معتبر بده. هیچ متن اضافی قبل/بعد نیاور.',
         },
         {
           role: "user",
           content:
-            "این ورودی کاربر (goal, industry, audience, tone, capacity):\n" +
+            "ورودی کاربر (goal, industry, audience, tone, capacity):\n" +
             JSON.stringify(input),
         },
         {
@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
     const parsed = StrategySchema.safeParse(json);
     if (!parsed.success) {
       return NextResponse.json(
-        { error: "Schema mismatch", issues: parsed.error.issues },
+        { error: "Schema mismatch", issues: parsed.error.issues, raw: json },
         { status: 422 }
       );
     }
