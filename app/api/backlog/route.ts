@@ -11,7 +11,6 @@ export async function POST(req: NextRequest) {
   if (!process.env.OPENAI_API_KEY) {
     return NextResponse.json({
       items: Array.from({ length: 10 }).map((_, i) => ({
-        // ❗️به‌جای بکتیک، از رشته عادی + عدد استفاده می‌کنیم:
         title: "ایده شماره " + (i + 1),
         format: ["رِیل", "پست", "توییت", "نوشته"][i % 4],
         score: 70 + (i % 20),
@@ -22,12 +21,12 @@ export async function POST(req: NextRequest) {
   try {
     const resp = await openai.responses.create({
       model: "gpt-4.1-mini",
-      text: { format: "json" },
+      // ⛔️ هیچ text.format ست نمی‌کنیم
       input: [
         {
           role: "system",
           content:
-            "تو ایده‌پرداز محتوا هستی. فقط JSON مطابق اسکیمای TopicSchema بده.",
+            "تو ایده‌پرداز محتوا هستی. فقط JSON معتبر مطابق اسکیمای TopicSchema بده. هیچ متن اضافی ننویس.",
         },
         {
           role: "user",
@@ -37,7 +36,7 @@ export async function POST(req: NextRequest) {
         {
           role: "user",
           content:
-            "۱۰ ایده بده با کلیدهای: items[{title, format (یکی از: «رِیل», «پست», «توییت», «نوشته»), score(0..100)}]",
+            "۱۰ ایده بده با کلیدهای: items[{title, format (یکی از: «رِیل», «پست», «توییت», «نوشته»), score(0..100)}]. فقط JSON بده.",
         },
       ],
     });
@@ -51,7 +50,7 @@ export async function POST(req: NextRequest) {
     const parsed = TopicSchema.safeParse(json);
     if (!parsed.success) {
       return NextResponse.json(
-        { error: "Schema mismatch", issues: parsed.error.issues },
+        { error: "Schema mismatch", issues: parsed.error.issues, raw: json },
         { status: 422 }
       );
     }
