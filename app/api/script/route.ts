@@ -26,31 +26,21 @@ export async function POST(req: NextRequest) {
       model: "gpt-4.1-mini",
       text: { format: "json" },
       input: [
-        { role: "system", content: "تو کپی‌رایتر و استراتژیست ویدیو هستی. فقط JSON مطابق اسکیمای ScriptSchema بده." },
+        { role: "system", content: "فقط JSON مطابق ScriptSchema بده." },
         { role: "user", content: "استراتژی:\n" + JSON.stringify(strategy ?? {}, null, 2) },
-        { role: "user", content: "ایده انتخاب‌شده:\n" + JSON.stringify(idea ?? {}, null, 2) },
-        { role: "user", content: "خروجی با کلیدهای: id, title, technique, format, blocks{}, hooks, beats[], planSilent[], narration[], cta" },
+        { role: "user", content: "ایده:\n" + JSON.stringify(idea ?? {}, null, 2) },
+        { role: "user", content: "keys: id, title, technique, format, blocks{}, hooks, beats[], planSilent[], narration[], cta" }
       ],
     });
 
-    const outText =
-      (resp as any).output_text ??
-      (resp as any)?.output?.[0]?.content?.[0]?.text ?? "";
+    const outText = (resp as any).output_text ?? (resp as any)?.output?.[0]?.content?.[0]?.text ?? "";
     const json = JSON.parse(outText || "{}");
 
     const parsed = ScriptSchema.safeParse(json);
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: "Schema mismatch", issues: parsed.error.issues },
-        { status: 422 }
-      );
-    }
+    if (!parsed.success) return NextResponse.json({ error: "Schema mismatch", issues: parsed.error.issues }, { status: 422 });
     return NextResponse.json(parsed.data);
   } catch (err: any) {
     console.error(err);
-    return NextResponse.json(
-      { error: err?.message ?? "خطا در فراخوانی OpenAI" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: err?.message ?? "خطا در فراخوانی OpenAI" }, { status: 500 });
   }
 }
