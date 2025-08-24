@@ -1,7 +1,7 @@
 // app/api/strategy/snapshot/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { StrategySchema } from "../../../../lib/schemas";
-import { openai } from "../../../../lib/openai";
+import { StrategySchema } from "@/lib/schemas";
+import { openai } from "@/lib/openai";
 
 export async function POST(req: NextRequest) {
   const input = await req.json();
